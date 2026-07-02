@@ -88,6 +88,21 @@ Difficulty also ramps slightly faster (speed +6°/s per hit, was +5).
   menu once a best exists. Failures (dismissed sheet, unsupported web) are
   swallowed silently.
 
+## Background music (added 2026-07-03)
+
+- An original ~18.5 s looping track synthesized from scratch by
+  `scripts/make_music.py` (pure Python, no samples → no licensing risk):
+  dark minimal electronic in A minor at 104 BPM — detuned sine pads over
+  i–VI–iv–V (Am–F–Dm–E), plucked bass on quarters, an echoing eighth-note
+  arpeggio, and faint offbeat noise ticks. Note tails wrap around the loop
+  boundary, so the loop is seamless by construction.
+- Played with `expo-audio` (`useAudioPlayer`, `loop = true`, volume 0.45),
+  running across all phases so the menu and game feel continuous.
+- A ♪ button (top-left) toggles mute, persisted in AsyncStorage; it stops
+  event propagation so toggling mid-run never counts as a game tap. Browsers
+  block autoplay, so the first tap also nudges playback on web.
+
 ## Out of scope (YAGNI)
 
-Sound, multiple modes, Game Center, tutorials beyond the one-line hint.
+Sound effects per hit, multiple tracks, Game Center, tutorials beyond the
+one-line hint.
