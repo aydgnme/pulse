@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -40,9 +41,15 @@ const FILL = {
 } as const;
 
 const BEST_KEY = 'pulse.best';
+const MUTE_KEY = 'pulse.muted';
 const RESTART_LOCKOUT_MS = 500;
 const DOT = 20;
 const GOLD = '#FFD76B';
+const MUSIC_VOLUME = 0.45;
+
+// Original loop synthesized for the game (scripts/make_music.py) — no
+// licensing strings attached.
+const THEME = require('../assets/audio/theme.wav');
 
 /** Needle colour drifts from calm mint to hot amber as the speed climbs. */
 function tensionColor(t: number): string {
@@ -92,6 +99,9 @@ export default function Game() {
   const [deathNote, setDeathNote] = useState<string | null>(null);
   const [popupText, setPopupText] = useState('');
   const [tensionT, setTensionT] = useState(0);
+  const [muted, setMuted] = useState(false);
+
+  const music = useAudioPlayer(THEME);
 
   // Mutable per-frame state lives in refs so the rAF loop never re-renders.
   const angle = useRef(0);
@@ -116,7 +126,37 @@ export default function Game() {
     AsyncStorage.getItem(BEST_KEY)
       .then((v) => v && setBest(parseInt(v, 10) || 0))
       .catch(() => {});
+    AsyncStorage.getItem(MUTE_KEY)
+      .then((v) => v === '1' && setMuted(true))
+      .catch(() => {});
   }, []);
+
+  // Background music: loop forever, obey the mute toggle. Browsers block
+  // autoplay, so onTap also nudges playback on the first interaction.
+  useEffect(() => {
+    music.loop = true;
+    music.volume = MUSIC_VOLUME;
+  }, [music]);
+
+  useEffect(() => {
+    try {
+      if (muted) music.pause();
+      else music.play();
+    } catch {
+      // audio unavailable (e.g. web before a user gesture) — retried on tap
+    }
+  }, [muted, music]);
+
+  const toggleMute = useCallback(
+    (e: GestureResponderEvent) => {
+      e.stopPropagation();
+      setMuted((m) => {
+        AsyncStorage.setItem(MUTE_KEY, m ? '0' : '1').catch(() => {});
+        return !m;
+      });
+    },
+    [],
+  );
 
   // A timing game can't keep running while the app is backgrounded.
   useEffect(() => {
@@ -288,6 +328,11 @@ export default function Game() {
   }, []);
 
   const onTap = useCallback(() => {
+    if (!muted && !music.playing) {
+      try {
+        music.play();
+      } catch {}
+    }
     if (phase === 'menu') {
       start();
       return;
@@ -308,7 +353,7 @@ export default function Game() {
     } else {
       registerHit(quality);
     }
-  }, [phase, start, registerHit, die]);
+  }, [phase, start, registerHit, die, muted, music]);
 
   // Target dot position on the ring (0° = top, clockwise).
   const targetRad = (targetAngle * Math.PI) / 180;
@@ -338,6 +383,17 @@ export default function Game() {
         <Text style={styles.bestLabel}>BEST</Text>
         <Text style={styles.bestValue}>{best}</Text>
       </View>
+
+      <Pressable
+        style={styles.muteButton}
+        hitSlop={16}
+        {...(Platform.OS === 'web'
+          ? { onPress: toggleMute }
+          : { onPressIn: toggleMute })}
+      >
+        <Text style={[styles.muteIcon, muted && styles.muteIconOff]}>♪</Text>
+        {muted && <View style={styles.muteSlash} />}
+      </Pressable>
 
       {phase === 'playing' && (
         <Pressable
@@ -543,6 +599,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 5,
     padding: 8,
+  },
+  muteButton: {
+    position: 'absolute',
+    top: 70,
+    left: 28,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  muteIcon: {
+    color: COLORS.dim,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  muteIconOff: {
+    opacity: 0.35,
+  },
+  muteSlash: {
+    position: 'absolute',
+    width: 26,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.dim,
+    transform: [{ rotate: '-45deg' }],
   },
   pauseBar: {
     width: 5,
