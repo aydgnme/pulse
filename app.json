@@ -7,13 +7,17 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#070B14",
-    "splash": {
-      "backgroundColor": "#070B14"
-    },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.aydgnme.pulse",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.aydgnme.pulse",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#070B14",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,6 +28,17 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#070B14"
+        }
+      ]
+    ]
   }
 }
