@@ -119,9 +119,9 @@ First release. One tap, one ring, one score to beat.
 
 ## Screenshots
 
-`store/screenshots/` — four 1320×2868 PNGs (6.9-inch iPhone tier; App Store
-Connect scales this size down for all smaller iPhones, so one set is enough).
-Upload in this order:
+`store/screenshots/` — four 1284×2778 PNGs (6.5-inch iPhone tier, one of the
+sizes App Store Connect accepts for the required iPhone slot; it scales this
+set for all other iPhones). Upload in this order:
 
 1. `1-one-tap.png` — One tap. Perfect timing.
 2. `2-faster.png` — Every hit gets faster.
