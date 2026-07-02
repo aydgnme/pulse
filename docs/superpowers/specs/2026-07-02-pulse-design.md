@@ -56,6 +56,19 @@ Expo-only constraint (no game engine, no custom native modules).
 - Score is huge and centered; best score persists via AsyncStorage and shows
   "NEW BEST" on a record run.
 
+## Pause, menu & sharing (added 2026-07-03)
+
+- Phases extended to `menu → playing ⇄ paused → over`.
+- A two-bar pause button (top-right) shows only while playing; it stops event
+  propagation so the pause tap never counts as a game tap. Tapping anywhere on
+  the pause screen resumes; RESTART and MENU pills offer the other exits.
+- The app auto-pauses when it loses foreground (AppState listener) — a timing
+  game must not keep running while backgrounded.
+- Score sharing uses React Native's built-in `Share` API (native share sheet,
+  no extra dependency): SHARE SCORE on the game-over screen, SHARE BEST on the
+  menu once a best exists. Failures (dismissed sheet, unsupported web) are
+  swallowed silently.
+
 ## Out of scope (YAGNI)
 
-Sound, multiple modes, pause, Game Center, tutorials beyond the one-line hint.
+Sound, multiple modes, Game Center, tutorials beyond the one-line hint.
