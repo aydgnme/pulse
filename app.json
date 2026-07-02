@@ -14,7 +14,6 @@
         "tinted": "./assets/icon-tinted.png"
       },
       "bundleIdentifier": "com.aydgnme.pulse",
-      "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -29,7 +28,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -46,6 +46,12 @@
       ],
       "expo-audio",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7746b18a-4630-45b7-a302-719716445a7d"
+      }
+    },
+    "owner": "aydgn.me"
   }
 }
