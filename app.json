@@ -8,6 +8,11 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#070B14",
     "ios": {
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      },
       "bundleIdentifier": "com.aydgnme.pulse",
       "buildNumber": "1",
       "supportsTablet": false,
@@ -39,7 +44,8 @@
           "backgroundColor": "#070B14"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }

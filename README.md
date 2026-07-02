@@ -1,5 +1,7 @@
 # Pulse
 
+![Pulse](store/branding/social-banner.png)
+
 One-tap timing game built with Expo. A needle orbits a ring — tap when it
 overlaps the target dot. Every hit reverses the needle, speeds it up, and
 shrinks the hit window. Miss once and the run is over.
@@ -27,4 +29,6 @@ iPhone. (`npx expo start --web` also works for a quick look in the browser.)
 - [`store/app-store-listing.md`](store/app-store-listing.md) — name, subtitle, description (EN/TR), keywords
 - [`store/screenshots/`](store/screenshots) — 6.9-inch App Store screenshots (1320×2868)
 - [`store/privacy-policy.md`](store/privacy-policy.md) — privacy policy to host and link
-- [`scripts/`](scripts) — PIL scripts that regenerate the icon set and screenshots
+- [`store/branding/`](store/branding) — logo mark, lockup, wordmarks, social banner
+- [`scripts/`](scripts) — Python scripts that regenerate icons, screenshots, branding, and the soundtrack
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes
