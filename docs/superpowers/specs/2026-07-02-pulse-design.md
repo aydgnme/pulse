@@ -56,6 +56,25 @@ Expo-only constraint (no game engine, no custom native modules).
 - Score is huge and centered; best score persists via AsyncStorage and shows
   "NEW BEST" on a record run.
 
+## Stress & retention mechanics (added 2026-07-03)
+
+Four additions, all in service of "simple but stressful, keeps you retrying":
+
+- **PERFECT hits** — the inner 35% of the window scores +2 (vs +1), pops a
+  gold "PERFECT +2" toast, bumps the score with a scale pop, and uses a
+  heavier haptic. Consecutive perfects show a chain ("PERFECT ×3"). Risk/reward:
+  aiming for the center invites late taps.
+- **Pressure spawns** — from score 5, each new target has a 25% chance to
+  spawn only 65–95° ahead instead of 110–250°: sudden short reaction windows
+  that spike the heart rate.
+- **Tension colour** — the needle (and hit pulse) drifts from calm mint to hot
+  amber as speed approaches the cap, so danger is visible peripherally.
+- **Near-miss autopsy** — dying shows *why*: "MISSED BY 3°" for close wrong
+  taps (only when ≤25°, otherwise it just says GAME OVER), "TOO SLOW" for
+  pass-bys. Near-miss feedback is the classic "one more try" trigger.
+
+Difficulty also ramps slightly faster (speed +6°/s per hit, was +5).
+
 ## Pause, menu & sharing (added 2026-07-03)
 
 - Phases extended to `menu → playing ⇄ paused → over`.

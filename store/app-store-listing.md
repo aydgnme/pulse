@@ -36,12 +36,15 @@ the next attempt. Just you, the ring, and a score to beat.
 
 HOW TO PLAY
 • Tap when the needle overlaps the target dot
+• Nail the dead center for a PERFECT — worth double
 • Every hit flips the direction and speeds things up
 • One wrong tap — or one missed target — ends the run
 • Tap again to instantly retry
 
 WHY YOU'LL KEEP COMING BACK
 • One-thumb play, sessions as short as ten seconds
+• PERFECT chains and surprise close targets that spike your pulse
+• See exactly how you died — "missed by 3°" will haunt you
 • A difficulty curve that ramps every single hit
 • Crisp haptic feedback on every hit and every miss
 • Your best score is always on screen, daring you
@@ -67,12 +70,15 @@ bekleyen bir rekor.
 
 NASIL OYNANIR
 • İğne hedef noktanın üzerindeyken dokun
+• Tam merkezi tuttur: PERFECT — iki kat puan
 • Her isabet yönü değiştirir ve oyunu hızlandırır
 • Tek bir yanlış dokunuş ya da kaçan hedef oyunu bitirir
 • Tekrar dokun, anında yeniden başla
 
 NEDEN BAĞIMLILIK YAPAR
 • Tek parmakla oyna, on saniyelik molalara bile sığar
+• PERFECT zincirleri ve aniden yakın doğan hedefler nabzı yükseltir
+• Nasıl öldüğünü tam gör: "3° ile kaçırdın" mesajı peşini bırakmaz
 • Her isabette sertleşen zorluk eğrisi
 • Her isabette ve her kayıpta net titreşim geri bildirimi
 • Rekorun hep ekranda, seni kışkırtıyor
