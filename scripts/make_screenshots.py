@@ -5,7 +5,7 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "store", "screenshots")
-W, H = 1320, 2868
+W, H = 1284, 2778
 SS = 2  # supersample
 BG_TOP = (10, 16, 32)
 BG_BOTTOM = (7, 11, 20)
