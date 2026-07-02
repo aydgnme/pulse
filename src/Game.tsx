@@ -3,9 +3,12 @@ import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Easing,
+  GestureResponderEvent,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -23,7 +26,7 @@ import {
 } from './logic';
 import { COLORS } from './theme';
 
-type Phase = 'menu' | 'playing' | 'over';
+type Phase = 'menu' | 'playing' | 'paused' | 'over';
 
 const FILL = {
   position: 'absolute',
@@ -36,6 +39,35 @@ const FILL = {
 const BEST_KEY = 'pulse.best';
 const RESTART_LOCKOUT_MS = 500;
 const DOT = 20;
+
+function PillButton({
+  label,
+  onPress,
+  accent = false,
+}: {
+  label: string;
+  onPress: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={(e: GestureResponderEvent) => {
+        e.stopPropagation();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.pill,
+        accent && styles.pillAccent,
+        pressed && styles.pillPressed,
+      ]}
+      hitSlop={8}
+    >
+      <Text style={[styles.pillText, accent && styles.pillTextAccent]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function Game() {
   const { width, height } = useWindowDimensions();
@@ -68,7 +100,17 @@ export default function Game() {
       .catch(() => {});
   }, []);
 
-  // Breathing "tap" hint on menu / game-over screens.
+  // A timing game can't keep running while the app is backgrounded.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        setPhase((p) => (p === 'playing' ? 'paused' : p));
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Breathing "tap" hint on menu / paused / game-over screens.
   useEffect(() => {
     if (phase === 'playing') return;
     const loop = Animated.loop(
@@ -172,9 +214,30 @@ export default function Game() {
     }).start();
   }, [pulseAnim]);
 
+  const shareScore = useCallback(async (value: number, isBest: boolean) => {
+    try {
+      await Share.share({
+        message: isBest
+          ? `My best streak in Pulse is ${value}. One tap, perfect timing — can you beat it?`
+          : `I just scored ${value} in Pulse. One tap, perfect timing — can you beat it?`,
+      });
+    } catch {
+      // user dismissed the sheet, or sharing is unavailable (e.g. web)
+    }
+  }, []);
+
+  const pause = useCallback((e: GestureResponderEvent) => {
+    e.stopPropagation();
+    setPhase('paused');
+  }, []);
+
   const onTap = useCallback(() => {
     if (phase === 'menu') {
       start();
+      return;
+    }
+    if (phase === 'paused') {
+      setPhase('playing');
       return;
     }
     if (phase === 'over') {
@@ -196,6 +259,11 @@ export default function Game() {
     outputRange: ['0deg', '360deg'],
   });
 
+  const hintOpacity = hintAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.35, 1],
+  });
+
   return (
     // onPressIn keeps latency low on device; react-native-web only wires
     // clicks reliably, so the web build listens to onPress instead.
@@ -207,6 +275,19 @@ export default function Game() {
         <Text style={styles.bestLabel}>BEST</Text>
         <Text style={styles.bestValue}>{best}</Text>
       </View>
+
+      {phase === 'playing' && (
+        <Pressable
+          style={styles.pauseButton}
+          hitSlop={16}
+          {...(Platform.OS === 'web'
+            ? { onPress: pause }
+            : { onPressIn: pause })}
+        >
+          <View style={styles.pauseBar} />
+          <View style={styles.pauseBar} />
+        </Pressable>
+      )}
 
       <View style={{ width: radius * 2, height: radius * 2 }}>
         {/* Hit pulse: a ring that blooms outward on every successful tap */}
@@ -260,44 +341,60 @@ export default function Game() {
           {phase === 'menu' ? (
             <>
               <Text style={styles.title}>PULSE</Text>
-              <Animated.Text
-                style={[
-                  styles.hint,
-                  {
-                    opacity: hintAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.35, 1],
-                    }),
-                  },
-                ]}
-              >
+              <Animated.Text style={[styles.hint, { opacity: hintOpacity }]}>
                 TAP TO START
               </Animated.Text>
             </>
           ) : (
             <Text style={styles.score}>{score}</Text>
           )}
+          {phase === 'paused' && (
+            <>
+              <Text style={[styles.overLabel, styles.pausedLabel]}>
+                PAUSED
+              </Text>
+              <Animated.Text style={[styles.hint, { opacity: hintOpacity }]}>
+                TAP TO RESUME
+              </Animated.Text>
+            </>
+          )}
           {phase === 'over' && (
             <>
               <Text style={styles.overLabel}>
                 {score > 0 && score >= best ? 'NEW BEST' : 'GAME OVER'}
               </Text>
-              <Animated.Text
-                style={[
-                  styles.hint,
-                  {
-                    opacity: hintAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.35, 1],
-                    }),
-                  },
-                ]}
-              >
+              <Animated.Text style={[styles.hint, { opacity: hintOpacity }]}>
                 TAP TO RETRY
               </Animated.Text>
             </>
           )}
         </View>
+      </View>
+
+      {/* Phase actions under the ring */}
+      <View style={styles.actions}>
+        {phase === 'menu' && best > 0 && (
+          <PillButton
+            label="SHARE BEST"
+            onPress={() => shareScore(best, true)}
+          />
+        )}
+        {phase === 'paused' && (
+          <>
+            <PillButton label="RESTART" onPress={start} />
+            <PillButton label="MENU" onPress={() => setPhase('menu')} />
+          </>
+        )}
+        {phase === 'over' && (
+          <>
+            <PillButton
+              label="SHARE SCORE"
+              accent
+              onPress={() => shareScore(score, score > 0 && score >= best)}
+            />
+            <PillButton label="MENU" onPress={() => setPhase('menu')} />
+          </>
+        )}
       </View>
 
       <Text style={styles.footer}>
@@ -339,6 +436,20 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     marginTop: 2,
+  },
+  pauseButton: {
+    position: 'absolute',
+    top: 74,
+    right: 28,
+    flexDirection: 'row',
+    gap: 5,
+    padding: 8,
+  },
+  pauseBar: {
+    width: 5,
+    height: 20,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.dim,
   },
   ring: {
     ...FILL,
@@ -394,12 +505,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 4,
   },
+  pausedLabel: {
+    color: COLORS.dim,
+  },
   hint: {
     color: COLORS.dim,
     fontSize: 13,
     letterSpacing: 3,
     fontWeight: '600',
     marginTop: 14,
+  },
+  actions: {
+    position: 'absolute',
+    bottom: 120,
+    flexDirection: 'row',
+    gap: 14,
+    minHeight: 46,
+    alignItems: 'center',
+  },
+  pill: {
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 147, 167, 0.45)',
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+  },
+  pillAccent: {
+    borderColor: COLORS.needle,
+  },
+  pillPressed: {
+    opacity: 0.55,
+  },
+  pillText: {
+    color: COLORS.dim,
+    fontSize: 13,
+    letterSpacing: 2,
+    fontWeight: '700',
+  },
+  pillTextAccent: {
+    color: COLORS.needle,
   },
   footer: {
     position: 'absolute',
