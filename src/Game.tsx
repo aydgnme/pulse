@@ -17,10 +17,13 @@ import {
 
 import {
   degreesUntilTarget,
-  isHit,
+  hitQuality,
   isMissed,
+  nearMissDegrees,
+  pointsFor,
   spawnTarget,
   speedAfterHit,
+  tension,
   TUNING,
   windowAfterHit,
 } from './logic';
@@ -39,6 +42,15 @@ const FILL = {
 const BEST_KEY = 'pulse.best';
 const RESTART_LOCKOUT_MS = 500;
 const DOT = 20;
+const GOLD = '#FFD76B';
+
+/** Needle colour drifts from calm mint to hot amber as the speed climbs. */
+function tensionColor(t: number): string {
+  const mint = [94, 234, 212];
+  const amber = [255, 180, 84];
+  const c = mint.map((m, i) => Math.round(m + (amber[i] - m) * Math.min(t, 1)));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
 
 function PillButton({
   label,
@@ -77,6 +89,9 @@ export default function Game() {
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [targetAngle, setTargetAngle] = useState(140);
+  const [deathNote, setDeathNote] = useState<string | null>(null);
+  const [popupText, setPopupText] = useState('');
+  const [tensionT, setTensionT] = useState(0);
 
   // Mutable per-frame state lives in refs so the rAF loop never re-renders.
   const angle = useRef(0);
@@ -87,12 +102,15 @@ export default function Game() {
   const passed = useRef(false);
   const prevDist = useRef(360);
   const scoreRef = useRef(0);
+  const chain = useRef(0);
   const diedAt = useRef(0);
 
   const needleAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const flashAnim = useRef(new Animated.Value(0)).current;
   const hintAnim = useRef(new Animated.Value(0)).current;
+  const popupAnim = useRef(new Animated.Value(1)).current;
+  const scoreScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     AsyncStorage.getItem(BEST_KEY)
@@ -133,24 +151,30 @@ export default function Game() {
     return () => loop.stop();
   }, [phase, hintAnim]);
 
-  const die = useCallback(() => {
-    diedAt.current = Date.now();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
-      () => {},
-    );
-    flashAnim.setValue(0.85);
-    Animated.timing(flashAnim, {
-      toValue: 0,
-      duration: 450,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-    if (scoreRef.current > best) {
-      setBest(scoreRef.current);
-      AsyncStorage.setItem(BEST_KEY, String(scoreRef.current)).catch(() => {});
-    }
-    setPhase('over');
-  }, [best, flashAnim]);
+  const die = useCallback(
+    (note: string | null) => {
+      diedAt.current = Date.now();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+        () => {},
+      );
+      flashAnim.setValue(0.85);
+      Animated.timing(flashAnim, {
+        toValue: 0,
+        duration: 450,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+      if (scoreRef.current > best) {
+        setBest(scoreRef.current);
+        AsyncStorage.setItem(BEST_KEY, String(scoreRef.current)).catch(
+          () => {},
+        );
+      }
+      setDeathNote(note);
+      setPhase('over');
+    },
+    [best, flashAnim],
+  );
 
   // Game loop: advance the needle, detect a silent pass-by (miss).
   useEffect(() => {
@@ -166,7 +190,7 @@ export default function Game() {
         if (d - prevDist.current > 180) passed.current = true;
         prevDist.current = d;
         if (isMissed(d, window.current, passed.current)) {
-          die();
+          die('TOO SLOW');
           return;
         }
       }
@@ -183,36 +207,68 @@ export default function Game() {
     speed.current = TUNING.startSpeed;
     window.current = TUNING.startWindow;
     scoreRef.current = 0;
+    chain.current = 0;
     passed.current = false;
-    const t = spawnTarget(0, 1);
+    const t = spawnTarget(0, 1, 0);
     target.current = t;
     prevDist.current = degreesUntilTarget(0, t, 1);
     needleAnim.setValue(0);
     setTargetAngle(t);
     setScore(0);
+    setDeathNote(null);
+    setTensionT(0);
     setPhase('playing');
   }, [needleAnim]);
 
-  const registerHit = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    scoreRef.current += 1;
-    setScore(scoreRef.current);
-    dir.current = dir.current === 1 ? -1 : 1;
-    speed.current = speedAfterHit(speed.current);
-    window.current = windowAfterHit(window.current);
-    const t = spawnTarget(angle.current, dir.current);
-    target.current = t;
-    passed.current = false;
-    prevDist.current = degreesUntilTarget(angle.current, t, dir.current);
-    setTargetAngle(t);
-    pulseAnim.setValue(0);
-    Animated.timing(pulseAnim, {
-      toValue: 1,
-      duration: 350,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }, [pulseAnim]);
+  const registerHit = useCallback(
+    (quality: 'perfect' | 'good') => {
+      const perfect = quality === 'perfect';
+      Haptics.impactAsync(
+        perfect
+          ? Haptics.ImpactFeedbackStyle.Medium
+          : Haptics.ImpactFeedbackStyle.Light,
+      ).catch(() => {});
+      chain.current = perfect ? chain.current + 1 : 0;
+      scoreRef.current += pointsFor(quality);
+      setScore(scoreRef.current);
+      dir.current = dir.current === 1 ? -1 : 1;
+      speed.current = speedAfterHit(speed.current);
+      window.current = windowAfterHit(window.current);
+      setTensionT(tension(speed.current));
+      const t = spawnTarget(angle.current, dir.current, scoreRef.current);
+      target.current = t;
+      passed.current = false;
+      prevDist.current = degreesUntilTarget(angle.current, t, dir.current);
+      setTargetAngle(t);
+      pulseAnim.setValue(0);
+      Animated.timing(pulseAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+      if (perfect) {
+        setPopupText(
+          chain.current > 1 ? `PERFECT ×${chain.current}` : 'PERFECT +2',
+        );
+        popupAnim.setValue(0);
+        Animated.timing(popupAnim, {
+          toValue: 1,
+          duration: 650,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+      }
+      scoreScale.setValue(perfect ? 1.3 : 1.12);
+      Animated.timing(scoreScale, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    },
+    [pulseAnim, popupAnim, scoreScale],
+  );
 
   const shareScore = useCallback(async (value: number, isBest: boolean) => {
     try {
@@ -245,8 +301,13 @@ export default function Game() {
       return;
     }
     const d = degreesUntilTarget(angle.current, target.current, dir.current);
-    if (isHit(d, window.current)) registerHit();
-    else die();
+    const quality = hitQuality(d, window.current);
+    if (quality === 'none') {
+      const near = nearMissDegrees(d, window.current);
+      die(near !== null ? `MISSED BY ${near}°` : null);
+    } else {
+      registerHit(quality);
+    }
   }, [phase, start, registerHit, die]);
 
   // Target dot position on the ring (0° = top, clockwise).
@@ -263,6 +324,8 @@ export default function Game() {
     inputRange: [0, 1],
     outputRange: [0.35, 1],
   });
+
+  const needleColor = tensionColor(tensionT);
 
   return (
     // onPressIn keeps latency low on device; react-native-web only wires
@@ -297,6 +360,7 @@ export default function Game() {
             styles.pulseRing,
             {
               borderRadius: radius,
+              borderColor: needleColor,
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
                 outputRange: [0.5, 0],
@@ -332,10 +396,40 @@ export default function Game() {
             style={[
               styles.dot,
               styles.needleDot,
-              { left: radius - DOT / 2, top: -DOT / 2 },
+              {
+                left: radius - DOT / 2,
+                top: -DOT / 2,
+                backgroundColor: needleColor,
+                shadowColor: needleColor,
+              },
             ]}
           />
         </Animated.View>
+
+        {/* PERFECT popup: rises and fades above the score */}
+        <Animated.Text
+          pointerEvents="none"
+          style={[
+            styles.popup,
+            {
+              top: radius * 0.42,
+              opacity: popupAnim.interpolate({
+                inputRange: [0, 0.15, 1],
+                outputRange: [0, 1, 0],
+              }),
+              transform: [
+                {
+                  translateY: popupAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -30],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {popupText}
+        </Animated.Text>
 
         <View style={styles.centerContent} pointerEvents="none">
           {phase === 'menu' ? (
@@ -346,7 +440,11 @@ export default function Game() {
               </Animated.Text>
             </>
           ) : (
-            <Text style={styles.score}>{score}</Text>
+            <Animated.Text
+              style={[styles.score, { transform: [{ scale: scoreScale }] }]}
+            >
+              {score}
+            </Animated.Text>
           )}
           {phase === 'paused' && (
             <>
@@ -363,6 +461,7 @@ export default function Game() {
               <Text style={styles.overLabel}>
                 {score > 0 && score >= best ? 'NEW BEST' : 'GAME OVER'}
               </Text>
+              {deathNote && <Text style={styles.deathNote}>{deathNote}</Text>}
               <Animated.Text style={[styles.hint, { opacity: hintOpacity }]}>
                 TAP TO RETRY
               </Animated.Text>
@@ -398,7 +497,7 @@ export default function Game() {
       </View>
 
       <Text style={styles.footer}>
-        {phase === 'menu' ? 'hit the mark · every hit gets faster' : ' '}
+        {phase === 'menu' ? 'hit the mark · dead center = ×2' : ' '}
       </Text>
 
       {/* Death flash */}
@@ -459,7 +558,6 @@ const styles = StyleSheet.create({
   pulseRing: {
     ...FILL,
     borderWidth: 3,
-    borderColor: COLORS.needle,
   },
   dot: {
     position: 'absolute',
@@ -475,11 +573,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
   },
   needleDot: {
-    backgroundColor: COLORS.needle,
-    shadowColor: COLORS.needle,
     shadowOpacity: 0.9,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
+  },
+  popup: {
+    position: 'absolute',
+    alignSelf: 'center',
+    color: GOLD,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 3,
   },
   centerContent: {
     ...FILL,
@@ -507,6 +611,13 @@ const styles = StyleSheet.create({
   },
   pausedLabel: {
     color: COLORS.dim,
+  },
+  deathNote: {
+    color: COLORS.text,
+    fontSize: 13,
+    letterSpacing: 3,
+    fontWeight: '700',
+    marginTop: 10,
   },
   hint: {
     color: COLORS.dim,
