@@ -1,5 +1,4 @@
 import SwiftUI
-import QuartzCore
 
 // MARK: - Palette (mirrors src/theme.ts)
 
@@ -65,7 +64,7 @@ struct ContentView: View {
         model.onTap()
       }
     }
-    .onReceive(ticker) { _ in model.tick(CACurrentMediaTime()) }
+    .onReceive(ticker) { _ in model.tick(ProcessInfo.processInfo.systemUptime) }
     .onChange(of: scenePhase) { _, phase in
       if phase != .active { model.appBecameInactive() }
     }
