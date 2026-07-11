@@ -1,7 +1,13 @@
 # Pulse — Apple Watch App Design (v1.1)
 
 **Date:** 2026-07-11
-**Status:** Approved (brainstorming) — pending feasibility spike
+**Status:** Approved; feasibility spike PASSED (`@bacons/apple-targets` v4.0.7 on
+Expo SDK 57 generates a properly-embedded watch app target via a
+`PBXFileSystemSynchronizedRootGroup`). Source written; **watchOS Xcode/EAS build
++ on-device QA still pending** — the watch target cannot be compiled in the
+headless dev environment (SourceKit shows false-positive "not in scope" /
+"unavailable in macOS" errors because it analyses files with the host SDK
+outside the watch target's module).
 **Scope:** Add a standalone watchOS companion to the existing Expo/React Native game.
 
 ## Context
@@ -25,7 +31,7 @@ Xcode would be wiped on the next prebuild, so integration must survive CNG.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Integration | `@bacons/apple-targets` config plugin | Stays in Expo/CNG workflow; target survives prebuild. |
-| App type | Standalone (independent) watchOS app | Runs without iPhone; no `WatchConnectivity`. Fewest moving parts. |
+| App type | **Companion** watchOS app (paired with the Pulse iOS app) | `@bacons/apple-targets` does not support standalone watch apps — the target is distributed with the iOS app. No `WatchConnectivity` needed (no data sync). |
 | Input | Auto-sweep needle; hit fired by **tap OR Digital Crown** | Same timing mechanic as phone; crown is an alternative trigger, both call one `registerHit()`. |
 | Music | **Included**, foreground-only via `AVAudioPlayer` | Reuses `assets/audio/theme.wav`. **No background audio mode** on the watch target — avoids a watchOS repeat of the App Store 2.5.4 rejection. Mute toggle persisted. |
 | Haptics | `WKInterfaceDevice` Taptic Engine | perfect → `.success`, good → `.click`, miss/death → `.failure`. |
