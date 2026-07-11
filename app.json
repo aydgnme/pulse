@@ -44,7 +44,13 @@
           "backgroundColor": "#070B14"
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "microphonePermission": false
+        }
+      ],
       "expo-asset"
     ],
     "extra": {
