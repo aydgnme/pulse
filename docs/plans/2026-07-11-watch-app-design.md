@@ -3,11 +3,12 @@
 **Date:** 2026-07-11
 **Status:** Approved; feasibility spike PASSED (`@bacons/apple-targets` v4.0.7 on
 Expo SDK 57 generates a properly-embedded watch app target via a
-`PBXFileSystemSynchronizedRootGroup`). Source written; **watchOS Xcode/EAS build
-+ on-device QA still pending** — the watch target cannot be compiled in the
-headless dev environment (SourceKit shows false-positive "not in scope" /
-"unavailable in macOS" errors because it analyses files with the host SDK
-outside the watch target's module).
+`PBXFileSystemSynchronizedRootGroup`). Source written and **compile-verified**: the `PulseWatch`
+scheme builds successfully for a watchOS 26 simulator via
+`xcodebuild -workspace`. On-device QA (real Apple Watch) and an EAS release
+build for v1.1 remain. (SourceKit shows false-positive "not in scope" /
+"unavailable in macOS" errors in-editor because it analyses files with the host
+SDK outside the watch target's module — ignore them; the target compiles.)
 **Scope:** Add a standalone watchOS companion to the existing Expo/React Native game.
 
 ## Context

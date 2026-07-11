@@ -1,5 +1,4 @@
 import SwiftUI
-import QuartzCore
 
 /// The full game state machine — the watch counterpart of the phone's Game.tsx.
 /// The needle auto-sweeps; a hit is registered by a tap OR a Digital Crown turn,
@@ -59,7 +58,7 @@ final class GameModel: ObservableObject {
       last = nil
       phase = .playing
     case .over:
-      if CACurrentMediaTime() - diedAt > 0.5 { start() }
+      if ProcessInfo.processInfo.systemUptime - diedAt > 0.5 { start() }
     case .playing:
       let d = degreesUntilTarget(angle, targetAngle, dir)
       let quality = hitQuality(d, window)
@@ -121,7 +120,7 @@ final class GameModel: ObservableObject {
   }
 
   private func die(_ note: String?) {
-    diedAt = CACurrentMediaTime()
+    diedAt = ProcessInfo.processInfo.systemUptime
     Haptics.death()
     if score > best {
       best = score
