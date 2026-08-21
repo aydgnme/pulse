@@ -44,6 +44,15 @@ eas submit --platform ios
    `/.well-known/apple-app-site-association` over HTTPS with no redirect before
    the build is submitted, or the universal link silently fails to open. The
    files are ready in the `web/` directory; publish them before submission.
+
+   **Deploy mechanism is still undefined.** `web/.nojekyll` is in place so
+   GitHub Pages won't run its default Jekyll build and strip the dot-directory
+   containing the AASA file — but GitHub Pages only serves from the repo root
+   (`/`) or `/docs` on a branch, or from a `gh-pages` branch. It does not serve
+   an arbitrary `web/` directory as-is. The maintainer must pick one of these
+   (e.g. publish `web/`'s contents to a `gh-pages` branch, or via a
+   `/docs`-on-`main` copy/symlink) and point the `pulse.aydgn.me` DNS/CNAME at
+   it before submission.
 5. Select the build uploaded by `eas submit`, then **Submit for Review**.
 
 ## App Store Connect — 1.1.0 update

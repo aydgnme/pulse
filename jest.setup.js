@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('expo-constants', () => ({
+  __esModule: true,
   default: {
     expoConfig: {
       version: '1.0.0',
