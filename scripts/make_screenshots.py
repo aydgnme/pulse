@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate App Store screenshots (6.9-inch, 1320x2868) for Pulse."""
+"""Generate App Store screenshots (6.5-inch, 1284x2778) for Pulse."""
 import math
 import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
