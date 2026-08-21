@@ -1,6 +1,7 @@
 import type { View } from 'react-native';
 
 import { captureCard } from '../share/capture';
+import { CARD_LAYOUT_HEIGHT, CARD_LAYOUT_WIDTH } from '../share/types';
 
 // react-native-view-shot's own README says to prepend file:// before handing
 // its tmpfile result to a share sheet — iOS returns a bare filesystem path
@@ -35,6 +36,17 @@ describe('captureCard', () => {
     const uri = await captureCard(refWith({}));
 
     expect(uri).toBe('file:///private/var/tmp/card123.png');
+  });
+
+  it('captures at the card\'s layout dimensions, not its output pixel dimensions', async () => {
+    mockCaptureRef.mockResolvedValue('/private/var/tmp/card123.png');
+
+    await captureCard(refWith({}));
+
+    expect(mockCaptureRef).toHaveBeenCalledTimes(1);
+    const options = mockCaptureRef.mock.calls[0][1];
+    expect(options.width).toBe(CARD_LAYOUT_WIDTH);
+    expect(options.height).toBe(CARD_LAYOUT_HEIGHT);
   });
 
   it('leaves an Android-style file:// URI untouched', async () => {

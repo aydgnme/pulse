@@ -13,6 +13,13 @@ export async function captureCard(
 ): Promise<string | null> {
   if (!ref.current) return null;
   try {
+    // captureRef's width/height are interpreted as points on iOS (scaled up
+    // by the device's pixel ratio to the final bitmap, same as everything
+    // else react-native-view-shot measures) but as final pixel dimensions
+    // on Android — so CARD_LAYOUT_WIDTH/HEIGHT, the card's point size, is
+    // correct here for this iOS-only release, but would undersize the
+    // output by the device's pixel ratio if Android is ever enabled and
+    // would need to switch to CARD_WIDTH/HEIGHT there.
     const uri = await captureRef(ref, {
       result: 'tmpfile',
       format: 'png',
