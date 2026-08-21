@@ -7,13 +7,20 @@ export const CARD_HEIGHT = 1920;
 /**
  * The native capturer renders the view at its own point-size and then
  * multiplies by the device's pixel ratio to produce the final bitmap.
- * Laying the card out at the full 1080x1920 *points* would therefore
- * capture a bitmap device-scale-times too large (3240x5760 on a 3x
+ * Capturing a view laid out at the full 1080x1920 *points* would therefore
+ * produce a bitmap device-scale-times too large (3240x5760 on a 3x
  * iPhone) — a very large transient bitmap, and react-native-view-shot's
  * own source carries an inline comment that this branch "reports
- * incorrect success even though the image is blank." Scaling the layout
- * down by the device's pixel ratio keeps the captured output at exactly
- * CARD_WIDTH x CARD_HEIGHT pixels, regardless of device scale.
+ * incorrect success even though the image is blank."
+ *
+ * ShareCard sidesteps this without touching its own layout math: it renders
+ * its content at the full intended CARD_WIDTH x CARD_HEIGHT size as always,
+ * then scales that whole subtree down by 1/CARD_LAYOUT_SCALE inside a host
+ * view sized at CARD_LAYOUT_WIDTH x CARD_LAYOUT_HEIGHT. captureRef captures
+ * that host at its point size, and the device's pixel ratio scales it back
+ * up on the way out — landing on exactly CARD_WIDTH x CARD_HEIGHT pixels
+ * regardless of device scale, with every child (Ring included) scaled
+ * uniformly since the transform applies to the whole rendered hierarchy.
  */
 export const CARD_LAYOUT_SCALE = PixelRatio.get() || 1;
 export const CARD_LAYOUT_WIDTH = CARD_WIDTH / CARD_LAYOUT_SCALE;
