@@ -21,11 +21,13 @@ export async function captureCard(
       height: CARD_LAYOUT_HEIGHT,
     });
     if (!uri) return null;
-    // Android's tmpfile result is already a proper file:// URL, but on iOS
-    // it's a bare filesystem path with no scheme — react-native-view-shot's
-    // own README notes this and says to prepend file:// before handing the
-    // URI to a share sheet.
-    return uri.startsWith('file://') ? uri : `file://${uri}`;
+    // On iOS the tmpfile result is a bare filesystem path with no scheme, and
+    // a share sheet rejects it — react-native-view-shot's own README says to
+    // prepend file://. Every other platform already hands back a scheme
+    // (file:// on Android, content:// for a provider URI, data: on web), so
+    // test for a scheme rather than for file:// specifically: prefixing one
+    // that is already there corrupts the URI.
+    return /^[a-z][a-z0-9+.-]*:/i.test(uri) ? uri : `file://${uri}`;
   } catch {
     return null;
   }

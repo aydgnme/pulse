@@ -47,6 +47,25 @@ describe('captureCard', () => {
     expect(uri).toBe('file:///data/user/0/com.aydgnme.pulse/cache/card123.png');
   });
 
+  it('leaves a data: URI untouched', async () => {
+    // react-native-web resolves the capture to a data URI. Prefixing file://
+    // onto it produced "file://data:image/png;base64,..." — a URI no share
+    // sheet can read.
+    mockCaptureRef.mockResolvedValue('data:image/png;base64,iVBORw0KGgo=');
+
+    const uri = await captureCard(refWith({}));
+
+    expect(uri).toBe('data:image/png;base64,iVBORw0KGgo=');
+  });
+
+  it('leaves a content:// provider URI untouched', async () => {
+    mockCaptureRef.mockResolvedValue('content://media/external/images/1234');
+
+    const uri = await captureCard(refWith({}));
+
+    expect(uri).toBe('content://media/external/images/1234');
+  });
+
   it('returns null when the native capture rejects, rather than throwing', async () => {
     mockCaptureRef.mockRejectedValue(new Error('boom'));
 
