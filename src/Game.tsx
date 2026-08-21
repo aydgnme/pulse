@@ -561,13 +561,13 @@ export default function Game() {
         {phase === 'paused' && (
           <>
             <PillButton label="RESTART" onPress={start} />
-            <PillButton label="MENU" onPress={() => setPhase('menu')} />
+            <PillButton label="MENU" onPress={() => { setPhase('menu'); setGoal(null); }} />
           </>
         )}
         {phase === 'over' && (
           <>
             <PillButton label="SHARE SCORE" accent onPress={shareScore} />
-            <PillButton label="MENU" onPress={() => setPhase('menu')} />
+            <PillButton label="MENU" onPress={() => { setPhase('menu'); setGoal(null); }} />
           </>
         )}
       </View>
