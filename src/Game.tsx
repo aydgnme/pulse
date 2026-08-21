@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -22,6 +23,7 @@ import {
   isMissed,
   nearMissDegrees,
   pointsFor,
+  reachedGoal,
   spawnTarget,
   speedAfterHit,
   tension,
@@ -30,12 +32,13 @@ import {
 } from './logic';
 import Ring from './Ring';
 import { captureCard } from './share/capture';
+import { parseChallengeUrl } from './share/challengeLink';
 import { shareMessage, shareRun } from './share/deliver';
 import ShareCard from './share/ShareCard';
 import type { RunSnapshot } from './share/types';
 import { COLORS, tensionColor } from './theme';
 
-type Phase = 'menu' | 'playing' | 'paused' | 'over';
+type Phase = 'menu' | 'playing' | 'paused' | 'over' | 'challenge';
 
 const FILL = {
   position: 'absolute',
@@ -97,6 +100,7 @@ export default function Game() {
   const [tensionT, setTensionT] = useState(0);
   const [muted, setMuted] = useState(false);
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
+  const [goal, setGoal] = useState<number | null>(null);
 
   const music = useAudioPlayer(THEME);
 
@@ -127,6 +131,21 @@ export default function Game() {
     AsyncStorage.getItem(MUTE_KEY)
       .then((v) => v === '1' && setMuted(true))
       .catch(() => {});
+  }, []);
+
+  // A challenge link either launched the app cold or arrived while it was
+  // already running — both hand off to the challenge start screen.
+  useEffect(() => {
+    const accept = (url: string | null) => {
+      const challenged = url ? parseChallengeUrl(url) : null;
+      if (challenged === null) return;
+      setGoal(challenged);
+      setPhase('challenge');
+    };
+
+    Linking.getInitialURL().then(accept).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => accept(url));
+    return () => sub.remove();
   }, []);
 
   // Background music: loop forever, obey the mute toggle. Browsers block
@@ -277,6 +296,13 @@ export default function Game() {
       chain.current = perfect ? chain.current + 1 : 0;
       scoreRef.current += pointsFor(quality);
       setScore(scoreRef.current);
+      const goalJustReached = reachedGoal(scoreRef.current, goal);
+      if (goalJustReached) {
+        setGoal(null);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => {},
+        );
+      }
       dir.current = dir.current === 1 ? -1 : 1;
       speed.current = speedAfterHit(speed.current);
       window.current = windowAfterHit(window.current);
@@ -293,7 +319,16 @@ export default function Game() {
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
-      if (perfect) {
+      if (goalJustReached) {
+        setPopupText(`BEAT ${goal}!`);
+        popupAnim.setValue(0);
+        Animated.timing(popupAnim, {
+          toValue: 1,
+          duration: 650,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+      } else if (perfect) {
         setPopupText(
           chain.current > 1 ? `PERFECT ×${chain.current}` : 'PERFECT +2',
         );
@@ -313,7 +348,7 @@ export default function Game() {
         useNativeDriver: true,
       }).start();
     },
-    [pulseAnim, popupAnim, scoreScale],
+    [goal, pulseAnim, popupAnim, scoreScale],
   );
 
   const shareScore = useCallback(async () => {
@@ -343,7 +378,7 @@ export default function Game() {
         music.play();
       } catch {}
     }
-    if (phase === 'menu') {
+    if (phase === 'menu' || phase === 'challenge') {
       start();
       return;
     }
@@ -441,7 +476,9 @@ export default function Game() {
           radius={radius}
           needleRotation={rotate}
           needleColor={needleColor}
-          targetAngle={phase === 'menu' ? null : targetAngle}
+          targetAngle={
+            phase === 'menu' || phase === 'challenge' ? null : targetAngle
+          }
         />
 
         {/* PERFECT popup: rises and fades above the score */}
@@ -477,7 +514,7 @@ export default function Game() {
                 TAP TO START
               </Animated.Text>
             </>
-          ) : (
+          ) : phase === 'challenge' ? null : (
             <Animated.Text
               style={[styles.score, { transform: [{ scale: scoreScale }] }]}
             >
@@ -506,6 +543,14 @@ export default function Game() {
             </>
           )}
         </View>
+
+        {phase === 'challenge' && goal !== null && (
+          <View style={styles.challengeIntro} pointerEvents="none">
+            <Text style={styles.challengeLabel}>YOU WERE CHALLENGED</Text>
+            <Text style={styles.challengeGoal}>BEAT {goal}</Text>
+            <Text style={styles.challengeHint}>TAP TO START</Text>
+          </View>
+        )}
       </View>
 
       {/* Phase actions under the ring */}
@@ -666,6 +711,29 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     fontWeight: '600',
     marginTop: 14,
+  },
+  challengeIntro: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  challengeLabel: {
+    color: COLORS.dim,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 4,
+  },
+  challengeGoal: {
+    color: COLORS.needle,
+    fontSize: 52,
+    fontWeight: '800',
+    letterSpacing: 4,
+    marginTop: 8,
+  },
+  challengeHint: {
+    color: COLORS.dim,
+    fontSize: 13,
+    letterSpacing: 3,
+    marginTop: 20,
   },
   actions: {
     position: 'absolute',

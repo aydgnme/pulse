@@ -15,6 +15,7 @@
       },
       "bundleIdentifier": "com.aydgnme.pulse",
       "appleTeamId": "3T6P4XJ28F",
+      "associatedDomains": ["applinks:pulse.aydgn.me"],
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
