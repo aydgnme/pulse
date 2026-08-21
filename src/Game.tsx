@@ -31,6 +31,7 @@ import {
   windowAfterHit,
 } from './logic';
 import Ring from './Ring';
+import { maybeRequestReview, recordRun } from './rating';
 import { captureCard } from './share/capture';
 import { parseChallengeUrl } from './share/challengeLink';
 import { shareMessage, shareRun } from './share/deliver';
@@ -226,6 +227,7 @@ export default function Game() {
         AsyncStorage.setItem(BEST_KEY, String(scoreRef.current)).catch(
           () => {},
         );
+        maybeRequestReview();
       }
       setSnapshot({
         score: scoreRef.current,
@@ -235,6 +237,7 @@ export default function Game() {
         targetAngle: target.current,
         tension: tension(speed.current),
       });
+      recordRun();
       setDeathNote(note);
       setPhase('over');
     },
