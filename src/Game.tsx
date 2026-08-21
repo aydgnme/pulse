@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -9,7 +10,6 @@ import {
   GestureResponderEvent,
   Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -22,15 +22,23 @@ import {
   isMissed,
   nearMissDegrees,
   pointsFor,
+  reachedGoal,
   spawnTarget,
   speedAfterHit,
   tension,
   TUNING,
   windowAfterHit,
 } from './logic';
-import { COLORS } from './theme';
+import Ring from './Ring';
+import { maybePromptForRating, recordRunCounters } from './rating';
+import { captureCard } from './share/capture';
+import { parseChallengeUrl } from './share/challengeLink';
+import { shareBest as deliverBest, shareRun } from './share/deliver';
+import ShareCard from './share/ShareCard';
+import type { RunSnapshot } from './share/types';
+import { COLORS, tensionColor } from './theme';
 
-type Phase = 'menu' | 'playing' | 'paused' | 'over';
+type Phase = 'menu' | 'playing' | 'paused' | 'over' | 'challenge';
 
 const FILL = {
   position: 'absolute',
@@ -43,21 +51,12 @@ const FILL = {
 const BEST_KEY = 'pulse.best';
 const MUTE_KEY = 'pulse.muted';
 const RESTART_LOCKOUT_MS = 500;
-const DOT = 20;
 const GOLD = '#FFD76B';
 const MUSIC_VOLUME = 0.45;
 
 // Original loop synthesized for the game (scripts/make_music.py) — no
 // licensing strings attached.
 const THEME = require('../assets/audio/theme.wav');
-
-/** Needle colour drifts from calm mint to hot amber as the speed climbs. */
-function tensionColor(t: number): string {
-  const mint = [94, 234, 212];
-  const amber = [255, 180, 84];
-  const c = mint.map((m, i) => Math.round(m + (amber[i] - m) * Math.min(t, 1)));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
 
 function PillButton({
   label,
@@ -100,6 +99,8 @@ export default function Game() {
   const [popupText, setPopupText] = useState('');
   const [tensionT, setTensionT] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
+  const [goal, setGoal] = useState<number | null>(null);
 
   const music = useAudioPlayer(THEME);
 
@@ -114,6 +115,8 @@ export default function Game() {
   const scoreRef = useRef(0);
   const chain = useRef(0);
   const diedAt = useRef(0);
+  const cardRef = useRef<View | null>(null);
+  const sharing = useRef(false);
 
   const needleAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -129,6 +132,21 @@ export default function Game() {
     AsyncStorage.getItem(MUTE_KEY)
       .then((v) => v === '1' && setMuted(true))
       .catch(() => {});
+  }, []);
+
+  // A challenge link either launched the app cold or arrived while it was
+  // already running — both hand off to the challenge start screen.
+  useEffect(() => {
+    const accept = (url: string | null) => {
+      const challenged = url ? parseChallengeUrl(url) : null;
+      if (challenged === null) return;
+      setGoal(challenged);
+      setPhase('challenge');
+    };
+
+    Linking.getInitialURL().then(accept).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => accept(url));
+    return () => sub.remove();
   }, []);
 
   // Background music: loop forever, obey the mute toggle. Browsers block
@@ -204,17 +222,43 @@ export default function Game() {
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
-      if (scoreRef.current > best) {
+      const wasPersonalBest = scoreRef.current > best;
+      if (wasPersonalBest) {
         setBest(scoreRef.current);
         AsyncStorage.setItem(BEST_KEY, String(scoreRef.current)).catch(
           () => {},
         );
       }
+      setSnapshot({
+        score: scoreRef.current,
+        best: Math.max(best, scoreRef.current),
+        deathNote: note,
+        needleAngle: angle.current,
+        targetAngle: target.current,
+        tension: tension(speed.current),
+      });
+      // The counter bookkeeping is cheap, shows nothing to the player, and
+      // must be durable at the moment the run ends: the ordinary way a
+      // session ends (die, maybe retry, close the app) never reaches the
+      // menu, so anything deferred past this point would be silently lost.
+      // Un-awaited by design — a rating counter can never block the game.
+      // The prompt itself stays deferred to goToMenu; see maybePromptForRating.
+      recordRunCounters(wasPersonalBest);
       setDeathNote(note);
       setPhase('over');
     },
     [best, flashAnim],
   );
+
+  const goToMenu = useCallback(() => {
+    setPhase('menu');
+    setGoal(null);
+    // Un-awaited by design: a rating prompt can never block the UI. Only
+    // called from this calm moment, never from die() itself or the AppState
+    // listener — firing it on backgrounding would burn the once-per-version
+    // prompt without ever showing it to anyone.
+    maybePromptForRating();
+  }, []);
 
   // Game loop: advance the needle, detect a silent pass-by (miss).
   useEffect(() => {
@@ -257,6 +301,11 @@ export default function Game() {
     setScore(0);
     setDeathNote(null);
     setTensionT(0);
+    // Otherwise the previous run's full 1080x1920 card subtree stays
+    // mounted and reconciling for the rest of the session — die() always
+    // writes a fresh one before the share button is reachable, so this is
+    // cleanup, not a correctness fix.
+    setSnapshot(null);
     setPhase('playing');
   }, [needleAnim]);
 
@@ -271,6 +320,13 @@ export default function Game() {
       chain.current = perfect ? chain.current + 1 : 0;
       scoreRef.current += pointsFor(quality);
       setScore(scoreRef.current);
+      const goalJustReached = reachedGoal(scoreRef.current, goal);
+      if (goalJustReached) {
+        setGoal(null);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => {},
+        );
+      }
       dir.current = dir.current === 1 ? -1 : 1;
       speed.current = speedAfterHit(speed.current);
       window.current = windowAfterHit(window.current);
@@ -287,7 +343,16 @@ export default function Game() {
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
-      if (perfect) {
+      if (goalJustReached) {
+        setPopupText(`BEAT ${goal}!`);
+        popupAnim.setValue(0);
+        Animated.timing(popupAnim, {
+          toValue: 1,
+          duration: 650,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+      } else if (perfect) {
         setPopupText(
           chain.current > 1 ? `PERFECT ×${chain.current}` : 'PERFECT +2',
         );
@@ -307,20 +372,31 @@ export default function Game() {
         useNativeDriver: true,
       }).start();
     },
-    [pulseAnim, popupAnim, scoreScale],
+    [goal, pulseAnim, popupAnim, scoreScale],
   );
 
-  const shareScore = useCallback(async (value: number, isBest: boolean) => {
+  const shareScore = useCallback(async () => {
+    if (!snapshot || sharing.current) return;
+    sharing.current = true;
     try {
-      await Share.share({
-        message: isBest
-          ? `My best streak in Pulse is ${value}. One tap, perfect timing — can you beat it?`
-          : `I just scored ${value} in Pulse. One tap, perfect timing — can you beat it?`,
-      });
-    } catch {
-      // user dismissed the sheet, or sharing is unavailable (e.g. web)
+      const uri = await captureCard(cardRef);
+      await shareRun(snapshot, uri);
+    } finally {
+      sharing.current = false;
     }
-  }, []);
+  }, [snapshot]);
+
+  // No live run exists to render a card from on the menu screen — a
+  // text-only share, still carrying the install link.
+  const shareBest = useCallback(async () => {
+    if (sharing.current) return;
+    sharing.current = true;
+    try {
+      await deliverBest(best);
+    } finally {
+      sharing.current = false;
+    }
+  }, [best]);
 
   const pause = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
@@ -333,7 +409,7 @@ export default function Game() {
         music.play();
       } catch {}
     }
-    if (phase === 'menu') {
+    if (phase === 'menu' || phase === 'challenge') {
       start();
       return;
     }
@@ -354,11 +430,6 @@ export default function Game() {
       registerHit(quality);
     }
   }, [phase, start, registerHit, die, muted, music]);
-
-  // Target dot position on the ring (0° = top, clockwise).
-  const targetRad = (targetAngle * Math.PI) / 180;
-  const targetLeft = radius + radius * Math.sin(targetRad) - DOT / 2;
-  const targetTop = radius - radius * Math.cos(targetRad) - DOT / 2;
 
   const rotate = needleAnim.interpolate({
     inputRange: [0, 360],
@@ -432,35 +503,14 @@ export default function Game() {
             },
           ]}
         />
-        <View style={[styles.ring, { borderRadius: radius }]} />
-
-        {phase !== 'menu' && (
-          <View
-            style={[
-              styles.dot,
-              styles.targetDot,
-              { left: targetLeft, top: targetTop },
-            ]}
-          />
-        )}
-
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { transform: [{ rotate }] }]}
-          pointerEvents="none"
-        >
-          <View
-            style={[
-              styles.dot,
-              styles.needleDot,
-              {
-                left: radius - DOT / 2,
-                top: -DOT / 2,
-                backgroundColor: needleColor,
-                shadowColor: needleColor,
-              },
-            ]}
-          />
-        </Animated.View>
+        <Ring
+          radius={radius}
+          needleRotation={rotate}
+          needleColor={needleColor}
+          targetAngle={
+            phase === 'menu' || phase === 'challenge' ? null : targetAngle
+          }
+        />
 
         {/* PERFECT popup: rises and fades above the score */}
         <Animated.Text
@@ -495,7 +545,7 @@ export default function Game() {
                 TAP TO START
               </Animated.Text>
             </>
-          ) : (
+          ) : phase === 'challenge' ? null : (
             <Animated.Text
               style={[styles.score, { transform: [{ scale: scoreScale }] }]}
             >
@@ -524,30 +574,31 @@ export default function Game() {
             </>
           )}
         </View>
+
+        {phase === 'challenge' && goal !== null && (
+          <View style={styles.challengeIntro} pointerEvents="none">
+            <Text style={styles.challengeLabel}>YOU WERE CHALLENGED</Text>
+            <Text style={styles.challengeGoal}>BEAT {goal}</Text>
+            <Text style={styles.challengeHint}>TAP TO START</Text>
+          </View>
+        )}
       </View>
 
       {/* Phase actions under the ring */}
       <View style={styles.actions}>
         {phase === 'menu' && best > 0 && (
-          <PillButton
-            label="SHARE BEST"
-            onPress={() => shareScore(best, true)}
-          />
+          <PillButton label="SHARE BEST" onPress={shareBest} />
         )}
         {phase === 'paused' && (
           <>
             <PillButton label="RESTART" onPress={start} />
-            <PillButton label="MENU" onPress={() => setPhase('menu')} />
+            <PillButton label="MENU" onPress={goToMenu} />
           </>
         )}
         {phase === 'over' && (
           <>
-            <PillButton
-              label="SHARE SCORE"
-              accent
-              onPress={() => shareScore(score, score > 0 && score >= best)}
-            />
-            <PillButton label="MENU" onPress={() => setPhase('menu')} />
+            <PillButton label="SHARE SCORE" accent onPress={shareScore} />
+            <PillButton label="MENU" onPress={goToMenu} />
           </>
         )}
       </View>
@@ -564,6 +615,15 @@ export default function Game() {
           { backgroundColor: COLORS.danger, opacity: flashAnim },
         ]}
       />
+
+      {/* Off-screen share card, captured by shareScore on tap */}
+      {snapshot && (
+        <View style={styles.cardHost} pointerEvents="none" collapsable={false}>
+          <View ref={cardRef} collapsable={false}>
+            <ShareCard snapshot={snapshot} />
+          </View>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -630,32 +690,9 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
     backgroundColor: COLORS.dim,
   },
-  ring: {
-    ...FILL,
-    borderWidth: 3,
-    borderColor: COLORS.ring,
-  },
   pulseRing: {
     ...FILL,
     borderWidth: 3,
-  },
-  dot: {
-    position: 'absolute',
-    width: DOT,
-    height: DOT,
-    borderRadius: DOT / 2,
-  },
-  targetDot: {
-    backgroundColor: COLORS.target,
-    shadowColor: COLORS.target,
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  needleDot: {
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
   },
   popup: {
     position: 'absolute',
@@ -706,6 +743,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 14,
   },
+  challengeIntro: {
+    ...FILL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  challengeLabel: {
+    color: COLORS.dim,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 4,
+  },
+  challengeGoal: {
+    color: COLORS.needle,
+    fontSize: 52,
+    fontWeight: '800',
+    letterSpacing: 4,
+    marginTop: 8,
+  },
+  challengeHint: {
+    color: COLORS.dim,
+    fontSize: 13,
+    letterSpacing: 3,
+    marginTop: 20,
+  },
   actions: {
     position: 'absolute',
     bottom: 120,
@@ -742,5 +803,11 @@ const styles = StyleSheet.create({
     color: COLORS.dim,
     fontSize: 13,
     letterSpacing: 1,
+  },
+  cardHost: {
+    position: 'absolute',
+    left: -10000,
+    top: 0,
+    opacity: 0,
   },
 });

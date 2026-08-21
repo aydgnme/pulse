@@ -31,6 +31,30 @@ eas submit --platform ios
 - Uploads the finished build to App Store Connect (can also be done with the
   Transporter app).
 
+## App Store Connect — 1.2.0 update
+
+1. My Apps → **Pulse: One Tap Timing** → **＋** next to iOS App → version
+   **1.2.0**.
+2. Paste "What's New in This Version" from the 1.2.0 entry in
+   [`../CHANGELOG.md`](../CHANGELOG.md) (EN + TR locales).
+3. **App Privacy** remains "Data Not Collected" — the shared link carries only
+   an integer score, with no backend, no analytics, and no account.
+4. **Universal Link requirement:** 1.2.0 introduces a Universal Link feature
+   via shared run images. The domain `pulse.aydgn.me` must be live and serving
+   `/.well-known/apple-app-site-association` over HTTPS with no redirect before
+   the build is submitted, or the universal link silently fails to open. The
+   files are ready in the `web/` directory; publish them before submission.
+
+   **Deploy mechanism is still undefined.** `web/.nojekyll` is in place so
+   GitHub Pages won't run its default Jekyll build and strip the dot-directory
+   containing the AASA file — but GitHub Pages only serves from the repo root
+   (`/`) or `/docs` on a branch, or from a `gh-pages` branch. It does not serve
+   an arbitrary `web/` directory as-is. The maintainer must pick one of these
+   (e.g. publish `web/`'s contents to a `gh-pages` branch, or via a
+   `/docs`-on-`main` copy/symlink) and point the `pulse.aydgn.me` DNS/CNAME at
+   it before submission.
+5. Select the build uploaded by `eas submit`, then **Submit for Review**.
+
 ## App Store Connect — 1.1.0 update
 
 The app record already exists (id `6786884586`); this is an update, not a new
