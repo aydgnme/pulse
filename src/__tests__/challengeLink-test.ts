@@ -16,6 +16,18 @@ describe('buildChallengeUrl', () => {
   it('clamps a negative score to zero', () => {
     expect(buildChallengeUrl(-5)).toBe(`https://${CHALLENGE_HOST}/c/0`);
   });
+
+  it('treats NaN as zero', () => {
+    expect(buildChallengeUrl(NaN)).toBe(`https://${CHALLENGE_HOST}/c/0`);
+  });
+
+  it('treats Infinity as zero', () => {
+    expect(buildChallengeUrl(Infinity)).toBe(`https://${CHALLENGE_HOST}/c/0`);
+  });
+
+  it('treats -Infinity as zero', () => {
+    expect(buildChallengeUrl(-Infinity)).toBe(`https://${CHALLENGE_HOST}/c/0`);
+  });
 });
 
 describe('parseChallengeUrl', () => {
@@ -27,6 +39,12 @@ describe('parseChallengeUrl', () => {
     for (const n of [0, 1, 9, 42, 1000]) {
       expect(parseChallengeUrl(buildChallengeUrl(n))).toBe(n);
     }
+  });
+
+  it('round-trips non-finite values as zero', () => {
+    expect(parseChallengeUrl(buildChallengeUrl(NaN))).toBe(0);
+    expect(parseChallengeUrl(buildChallengeUrl(Infinity))).toBe(0);
+    expect(parseChallengeUrl(buildChallengeUrl(-Infinity))).toBe(0);
   });
 
   it('rejects a different host', () => {

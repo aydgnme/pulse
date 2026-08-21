@@ -6,7 +6,10 @@ export const CHALLENGE_HOST = 'pulse.aydgn.me';
 const CHALLENGE_PATH = /^\/c\/(\d+)$/;
 
 export function buildChallengeUrl(score: number): string {
-  const n = Math.max(0, Math.floor(score));
+  let n = Math.max(0, Math.floor(score));
+  if (!Number.isFinite(n)) {
+    n = 0;
+  }
   return `https://${CHALLENGE_HOST}/c/${n}`;
 }
 
