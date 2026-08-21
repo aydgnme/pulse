@@ -100,3 +100,19 @@ export function spawnTarget(
   const gap = lo + random() * (hi - lo);
   return needleAngle + dir * gap;
 }
+
+/**
+ * Where to place a dot of `dotSize` on a ring of `radius`, in the ring
+ * container's coordinates. 0° is the top, angles increase clockwise.
+ */
+export function dotPosition(
+  angleDeg: number,
+  radius: number,
+  dotSize: number,
+): { left: number; top: number } {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    left: radius + radius * Math.sin(rad) - dotSize / 2,
+    top: radius - radius * Math.cos(rad) - dotSize / 2,
+  };
+}

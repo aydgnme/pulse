@@ -28,7 +28,8 @@ import {
   TUNING,
   windowAfterHit,
 } from './logic';
-import { COLORS } from './theme';
+import Ring from './Ring';
+import { COLORS, tensionColor } from './theme';
 
 type Phase = 'menu' | 'playing' | 'paused' | 'over';
 
@@ -43,21 +44,12 @@ const FILL = {
 const BEST_KEY = 'pulse.best';
 const MUTE_KEY = 'pulse.muted';
 const RESTART_LOCKOUT_MS = 500;
-const DOT = 20;
 const GOLD = '#FFD76B';
 const MUSIC_VOLUME = 0.45;
 
 // Original loop synthesized for the game (scripts/make_music.py) — no
 // licensing strings attached.
 const THEME = require('../assets/audio/theme.wav');
-
-/** Needle colour drifts from calm mint to hot amber as the speed climbs. */
-function tensionColor(t: number): string {
-  const mint = [94, 234, 212];
-  const amber = [255, 180, 84];
-  const c = mint.map((m, i) => Math.round(m + (amber[i] - m) * Math.min(t, 1)));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
 
 function PillButton({
   label,
@@ -355,11 +347,6 @@ export default function Game() {
     }
   }, [phase, start, registerHit, die, muted, music]);
 
-  // Target dot position on the ring (0° = top, clockwise).
-  const targetRad = (targetAngle * Math.PI) / 180;
-  const targetLeft = radius + radius * Math.sin(targetRad) - DOT / 2;
-  const targetTop = radius - radius * Math.cos(targetRad) - DOT / 2;
-
   const rotate = needleAnim.interpolate({
     inputRange: [0, 360],
     outputRange: ['0deg', '360deg'],
@@ -432,35 +419,12 @@ export default function Game() {
             },
           ]}
         />
-        <View style={[styles.ring, { borderRadius: radius }]} />
-
-        {phase !== 'menu' && (
-          <View
-            style={[
-              styles.dot,
-              styles.targetDot,
-              { left: targetLeft, top: targetTop },
-            ]}
-          />
-        )}
-
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { transform: [{ rotate }] }]}
-          pointerEvents="none"
-        >
-          <View
-            style={[
-              styles.dot,
-              styles.needleDot,
-              {
-                left: radius - DOT / 2,
-                top: -DOT / 2,
-                backgroundColor: needleColor,
-                shadowColor: needleColor,
-              },
-            ]}
-          />
-        </Animated.View>
+        <Ring
+          radius={radius}
+          needleRotation={rotate}
+          needleColor={needleColor}
+          targetAngle={phase === 'menu' ? null : targetAngle}
+        />
 
         {/* PERFECT popup: rises and fades above the score */}
         <Animated.Text
@@ -630,32 +594,9 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
     backgroundColor: COLORS.dim,
   },
-  ring: {
-    ...FILL,
-    borderWidth: 3,
-    borderColor: COLORS.ring,
-  },
   pulseRing: {
     ...FILL,
     borderWidth: 3,
-  },
-  dot: {
-    position: 'absolute',
-    width: DOT,
-    height: DOT,
-    borderRadius: DOT / 2,
-  },
-  targetDot: {
-    backgroundColor: COLORS.target,
-    shadowColor: COLORS.target,
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  needleDot: {
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
   },
   popup: {
     position: 'absolute',
