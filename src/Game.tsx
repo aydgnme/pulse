@@ -31,7 +31,7 @@ import {
   windowAfterHit,
 } from './logic';
 import Ring from './Ring';
-import { maybeRequestReview, recordRun } from './rating';
+import { recordRun } from './rating';
 import { captureCard } from './share/capture';
 import { parseChallengeUrl } from './share/challengeLink';
 import { shareMessage, shareRun } from './share/deliver';
@@ -222,12 +222,12 @@ export default function Game() {
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
-      if (scoreRef.current > best) {
+      const wasPersonalBest = scoreRef.current > best;
+      if (wasPersonalBest) {
         setBest(scoreRef.current);
         AsyncStorage.setItem(BEST_KEY, String(scoreRef.current)).catch(
           () => {},
         );
-        maybeRequestReview();
       }
       setSnapshot({
         score: scoreRef.current,
@@ -237,7 +237,7 @@ export default function Game() {
         targetAngle: target.current,
         tension: tension(speed.current),
       });
-      recordRun();
+      recordRun(wasPersonalBest);
       setDeathNote(note);
       setPhase('over');
     },

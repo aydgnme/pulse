@@ -30,32 +30,33 @@ async function readNumber(key: string): Promise<number> {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Call after every finished run. */
-export async function recordRun(): Promise<void> {
-  try {
-    const runs = await readNumber(RUNS_KEY);
-    await AsyncStorage.setItem(RUNS_KEY, String(runs + 1));
-  } catch {
-    // counters are best-effort
-  }
-}
-
 /**
- * Call when the player has just beaten their personal best. Silently does
- * nothing when a gate is closed or the platform has no review flow.
+ * Call after every finished run, whether or not it was a personal best.
+ * Owns `pulse.rating.runsSincePrompt` (and, on a personal best,
+ * `pulse.rating.bestCount`) end to end: every step is awaited in order, so
+ * there is exactly one writer touching these keys at a time and no
+ * read-modify-write race is possible.
+ *
+ * Silently does nothing when a gate is closed or the platform has no review
+ * flow, and never rejects — a rating prompt can never interrupt a run.
  *
  * Note: StoreReview.isAvailableAsync() returns false on TestFlight. The prompt
  * will not appear during TestFlight QA — this is expected, not a defect.
  */
-export async function maybeRequestReview(): Promise<void> {
+export async function recordRun(wasPersonalBest: boolean): Promise<void> {
   try {
-    const currentVersion = Constants.expoConfig?.version ?? '0.0.0';
+    const runs = (await readNumber(RUNS_KEY)) + 1;
+    await AsyncStorage.setItem(RUNS_KEY, String(runs));
+
+    if (!wasPersonalBest) return;
+
     const bestCount = (await readNumber(BEST_COUNT_KEY)) + 1;
     await AsyncStorage.setItem(BEST_COUNT_KEY, String(bestCount));
 
+    const currentVersion = Constants.expoConfig?.version ?? '0.0.0';
     const state: RatingState = {
       bestCount,
-      runsSinceLastPrompt: await readNumber(RUNS_KEY),
+      runsSinceLastPrompt: runs,
       promptedVersion: await AsyncStorage.getItem(VERSION_KEY),
       currentVersion,
     };
@@ -68,6 +69,6 @@ export async function maybeRequestReview(): Promise<void> {
     await AsyncStorage.setItem(VERSION_KEY, currentVersion);
     await AsyncStorage.setItem(RUNS_KEY, '0');
   } catch {
-    // never let a rating prompt break the game
+    // counters and prompting are best-effort; never let this break the game
   }
 }
