@@ -2,6 +2,20 @@ import { render, screen } from '@testing-library/react-native';
 
 import ShareCard, { CARD_HEIGHT, CARD_WIDTH } from '../share/ShareCard';
 import type { RunSnapshot } from '../share/types';
+import { tensionColor } from '../theme';
+
+// The Ring is the whole point of the card: it's the picture of the
+// near-miss. Mock it so we can assert on exactly what ShareCard wires
+// into it, without depending on Ring's own internal rendering (which is
+// covered separately by dotPosition-test.ts).
+jest.mock('../Ring', () => ({
+  __esModule: true,
+  default: jest.fn(() => null),
+}));
+
+import Ring from '../Ring';
+
+const RingMock = Ring as jest.Mock;
 
 const snapshot: RunSnapshot = {
   score: 47,
@@ -37,5 +51,35 @@ describe('ShareCard', () => {
   it('shows the link so a screenshot alone still points home', async () => {
     await render(<ShareCard snapshot={snapshot} />);
     expect(screen.getByText('pulse.aydgn.me')).toBeTruthy();
+  });
+});
+
+describe('ShareCard Ring wiring', () => {
+  beforeEach(() => {
+    RingMock.mockClear();
+  });
+
+  it('renders a Ring', async () => {
+    await render(<ShareCard snapshot={snapshot} />);
+    expect(RingMock).toHaveBeenCalled();
+  });
+
+  it('derives needleRotation from snapshot.needleAngle, not targetAngle', async () => {
+    await render(<ShareCard snapshot={snapshot} />);
+    const props = RingMock.mock.calls[0][0];
+    expect(props.needleRotation).toBe('137deg');
+    expect(props.needleRotation).not.toBe(`${snapshot.targetAngle}deg`);
+  });
+
+  it('passes snapshot.targetAngle through as targetAngle', async () => {
+    await render(<ShareCard snapshot={snapshot} />);
+    const props = RingMock.mock.calls[0][0];
+    expect(props.targetAngle).toBe(140);
+  });
+
+  it('derives needleColor from tensionColor(snapshot.tension)', async () => {
+    await render(<ShareCard snapshot={snapshot} />);
+    const props = RingMock.mock.calls[0][0];
+    expect(props.needleColor).toBe(tensionColor(snapshot.tension));
   });
 });
