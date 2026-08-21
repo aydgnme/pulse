@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-08-21
+
+- Share your run as an image: the ring frozen at the moment you missed, the
+  near-miss angle, your score, and a challenge to beat it
+- Every share now carries an App Store link, so a friend can install from it
+- Tapping a shared link opens straight into the challenge with that score as
+  the goal
+- Asks for an App Store rating after a personal best, never after a death
+
 ## 1.1.0 — 2026-08-21
 
 - Apple Watch companion app (watchOS): the full one-tap timing game on the
