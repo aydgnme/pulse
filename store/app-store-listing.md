@@ -128,4 +128,12 @@ set for all other iPhones). Upload in this order:
 3. `3-one-miss.png` — One miss ends the run.
 4. `4-best.png` — Chase your best.
 
+`store/screenshots-watch/` — three 416×496 PNGs (the size App Store Connect
+lists for Apple Watch Series 10 and 11). Captured from the real `PulseWatch`
+app running on a watchOS simulator, not mocked up. Upload in this order:
+
+1. `1-tap-the-mark.png` — the needle sweeping toward the target mid-run.
+2. `2-one-miss.png` — the run ending on a missed target.
+3. `3-best.png` — the menu, with the best score to chase.
+
 iPad screenshots are not needed: `supportsTablet` is `false`.

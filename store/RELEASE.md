@@ -66,10 +66,12 @@ app, so the ＋ New App step is done. Build 3 was rejected under guideline 2.5.4
    **1.1.0**.
 2. Paste "What's New in This Version" from the 1.1.0 entry in
    [`../CHANGELOG.md`](../CHANGELOG.md) (EN + TR locales).
-3. **Apple Watch screenshots are required** now that the build embeds a watchOS
-   app — App Store Connect will not let you submit without them. Capture them
-   from the `PulseWatch` scheme on a watchOS simulator; the generated iPhone
-   screenshots in [`screenshots/`](screenshots/) do not cover this slot.
+3. **Apple Watch screenshots** are required now that the build embeds a watchOS
+   app — App Store Connect will not let you submit without them. Three are ready
+   in [`screenshots-watch/`](screenshots-watch/) at 416×496, the size App Store
+   Connect lists for Apple Watch Series 10 and 11. Upload them in filename
+   order. The iPhone screenshots in [`screenshots/`](screenshots/) do not cover
+   this slot.
 4. Re-check **App Privacy** still reads "Data Not Collected" — the watch app
    stores best score and mute in `UserDefaults` on-device only, which is not
    collection.
