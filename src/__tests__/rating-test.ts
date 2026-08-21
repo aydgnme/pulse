@@ -80,7 +80,12 @@ type MockedAsyncStorage = {
   setItem: jest.Mock;
 };
 
-describe('recordRun', () => {
+// recordRunCounters models die(): fired synchronously (well, un-awaited) at
+// the moment every run ends, whether or not the player ever comes back to
+// the menu. maybePromptForRating models goToMenu: only reachable from that
+// one calm moment, and only decides whether to show the native prompt based
+// on whatever recordRunCounters has already durably written.
+describe('recordRunCounters / maybePromptForRating', () => {
   // jest.mock() factories are hoisted above other module-scope declarations,
   // so a plain closed-over variable declared here would not be the same
   // binding the factory (and thus rating.ts) actually reads and writes —
@@ -95,7 +100,8 @@ describe('recordRun', () => {
     hasAction: jest.Mock;
     requestReview: jest.Mock;
   };
-  let recordRun: (wasPersonalBest: boolean) => Promise<void>;
+  let recordRunCounters: (wasPersonalBest: boolean) => Promise<void>;
+  let maybePromptForRating: () => Promise<void>;
   let mockStore: Record<string, string>;
 
   beforeEach(() => {
@@ -103,17 +109,40 @@ describe('recordRun', () => {
     AsyncStorage = require('@react-native-async-storage/async-storage')
       .default as MockedAsyncStorage;
     StoreReview = require('expo-store-review');
-    recordRun = require('../rating').recordRun;
+    const rating = require('../rating');
+    recordRunCounters = rating.recordRunCounters;
+    maybePromptForRating = rating.maybePromptForRating;
     mockStore = AsyncStorage.__store;
   });
 
   it('increments the run counter on an ordinary run', async () => {
     mockStore[RUNS_KEY] = '4';
 
-    await recordRun(false);
+    await recordRunCounters(false);
 
     expect(mockStore[RUNS_KEY]).toBe('5');
     expect(mockStore[BEST_COUNT_KEY]).toBeUndefined();
+    expect(StoreReview.requestReview).not.toHaveBeenCalled();
+  });
+
+  // The regression this fix is about: recordRunCounters is called from
+  // die(), and die() is the *only* place that fires reliably for every run
+  // — retrying a few times or closing the app from the game-over screen
+  // never reaches the menu, so maybePromptForRating (and the prompt it
+  // guards) might never run in a given session. The counters it wrote must
+  // still be sitting there, durable, whenever the app is opened again.
+  it("persists a run's counters even when the player never reaches the menu", async () => {
+    mockStore[RUNS_KEY] = '1';
+    mockStore[BEST_COUNT_KEY] = '1';
+
+    // Three personal-best runs in a row, as if the player died, retried,
+    // and died again each time — never once calling maybePromptForRating.
+    await recordRunCounters(true);
+    await recordRunCounters(true);
+    await recordRunCounters(true);
+
+    expect(mockStore[RUNS_KEY]).toBe('4');
+    expect(mockStore[BEST_COUNT_KEY]).toBe('4');
     expect(StoreReview.requestReview).not.toHaveBeenCalled();
   });
 
@@ -121,7 +150,8 @@ describe('recordRun', () => {
     // Only the first personal best: the bestCount gate (>= 3) is not open yet.
     mockStore[RUNS_KEY] = '5';
 
-    await recordRun(true);
+    await recordRunCounters(true);
+    await maybePromptForRating();
 
     expect(mockStore[RUNS_KEY]).toBe('6');
     expect(mockStore[BEST_COUNT_KEY]).toBe('1');
@@ -134,7 +164,8 @@ describe('recordRun', () => {
     mockStore[RUNS_KEY] = '5'; // this run makes it 6, already >= 5
     // no VERSION_KEY set, so promptedVersion !== currentVersion
 
-    await recordRun(true);
+    await recordRunCounters(true);
+    await maybePromptForRating();
 
     expect(mockStore[BEST_COUNT_KEY]).toBe('3');
     expect(mockStore[VERSION_KEY]).toBe('1.2.0');
@@ -148,26 +179,46 @@ describe('recordRun', () => {
     mockStore[BEST_COUNT_KEY] = '2';
     mockStore[RUNS_KEY] = '5';
 
-    await recordRun(true);
+    await recordRunCounters(true);
+    await maybePromptForRating();
     expect(mockStore[RUNS_KEY]).toBe('0');
     expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
 
-    // The regression this fix is about: under the old two-function
-    // implementation, a racing recordRun() write could read the run counter
-    // *before* maybeRequestReview()'s reset landed and write `old + 1` back
-    // *after* it, clobbering the reset with a stale high count. Now that
-    // increment-then-prompt-then-reset is one sequential function with a
-    // single writer, a following run must continue cleanly from the reset
-    // value instead of an old, clobbered one.
-    await recordRun(false);
+    // Both functions share a single write chain specifically so a following
+    // run's counter increment can never race the prompt's reset of
+    // RUNS_KEY: it must continue cleanly from the reset value instead of
+    // reading a stale pre-reset count.
+    await recordRunCounters(false);
     expect(mockStore[RUNS_KEY]).toBe('1');
     // No second prompt: promptedVersion already matches currentVersion.
+    await maybePromptForRating();
     expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
   });
 
-  it('never throws, even when storage rejects', async () => {
+  it('recordRunCounters queues ahead of a concurrently-fired prompt, so the prompt sees the fresh count', async () => {
+    mockStore[BEST_COUNT_KEY] = '2'; // one more makes 3, opening the gate
+    mockStore[RUNS_KEY] = '5';
+
+    // Mirrors die() firing recordRunCounters un-awaited, immediately
+    // followed (same tick, no menu visit in between) by maybePromptForRating
+    // — both queued without awaiting the first before starting the second.
+    const counters = recordRunCounters(true);
+    const prompt = maybePromptForRating();
+    await Promise.all([counters, prompt]);
+
+    expect(mockStore[BEST_COUNT_KEY]).toBe('3');
+    expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('recordRunCounters never throws, even when storage rejects', async () => {
     AsyncStorage.getItem.mockRejectedValueOnce(new Error('boom'));
 
-    await expect(recordRun(true)).resolves.toBeUndefined();
+    await expect(recordRunCounters(true)).resolves.toBeUndefined();
+  });
+
+  it('maybePromptForRating never throws, even when storage rejects', async () => {
+    AsyncStorage.getItem.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(maybePromptForRating()).resolves.toBeUndefined();
   });
 });

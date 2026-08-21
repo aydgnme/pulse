@@ -30,7 +30,7 @@ import {
   windowAfterHit,
 } from './logic';
 import Ring from './Ring';
-import { recordRun } from './rating';
+import { maybePromptForRating, recordRunCounters } from './rating';
 import { captureCard } from './share/capture';
 import { parseChallengeUrl } from './share/challengeLink';
 import { shareBest as deliverBest, shareRun } from './share/deliver';
@@ -117,10 +117,6 @@ export default function Game() {
   const diedAt = useRef(0);
   const cardRef = useRef<View | null>(null);
   const sharing = useRef(false);
-  // Personal-best flags for runs that finished but haven't reached a calm
-  // moment yet. recordRun must never fire on the death flash itself — see
-  // flushRatingQueue, invoked only when the player leaves to the menu.
-  const pendingRatingRuns = useRef<boolean[]>([]);
 
   const needleAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -241,38 +237,28 @@ export default function Game() {
         targetAngle: target.current,
         tension: tension(speed.current),
       });
-      // recordRun is deferred to flushRatingQueue rather than called here:
-      // firing it now would run it synchronously alongside the death flash
-      // and inside the restart lockout window, which the rating prompt must
-      // never do.
-      pendingRatingRuns.current.push(wasPersonalBest);
+      // The counter bookkeeping is cheap, shows nothing to the player, and
+      // must be durable at the moment the run ends: the ordinary way a
+      // session ends (die, maybe retry, close the app) never reaches the
+      // menu, so anything deferred past this point would be silently lost.
+      // Un-awaited by design — a rating counter can never block the game.
+      // The prompt itself stays deferred to goToMenu; see maybePromptForRating.
+      recordRunCounters(wasPersonalBest);
       setDeathNote(note);
       setPhase('over');
     },
     [best, flashAnim],
   );
 
-  // Flushes any runs that finished since the last flush through recordRun,
-  // in order, one at a time — preserving recordRun's single-writer
-  // guarantee over its AsyncStorage keys. Called only from a calm moment
-  // (leaving to the menu), never from die() itself. Un-awaited by design:
-  // a rating prompt can never block the UI.
-  const flushRatingQueue = useCallback(() => {
-    const queued = pendingRatingRuns.current;
-    if (queued.length === 0) return;
-    pendingRatingRuns.current = [];
-    (async () => {
-      for (const wasPersonalBest of queued) {
-        await recordRun(wasPersonalBest);
-      }
-    })();
-  }, []);
-
   const goToMenu = useCallback(() => {
     setPhase('menu');
     setGoal(null);
-    flushRatingQueue();
-  }, [flushRatingQueue]);
+    // Un-awaited by design: a rating prompt can never block the UI. Only
+    // called from this calm moment, never from die() itself or the AppState
+    // listener — firing it on backgrounding would burn the once-per-version
+    // prompt without ever showing it to anyone.
+    maybePromptForRating();
+  }, []);
 
   // Game loop: advance the needle, detect a silent pass-by (miss).
   useEffect(() => {
