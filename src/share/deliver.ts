@@ -1,4 +1,3 @@
-import * as Sharing from 'expo-sharing';
 import { Share } from 'react-native';
 
 import { buildChallengeUrl } from './challengeLink';
@@ -12,27 +11,25 @@ export function shareMessage(score: number, isBest: boolean): string {
 }
 
 /**
- * Sends the run out. Prefers the captured image; falls back to text when the
- * capture failed or image sharing is unavailable. Never throws.
+ * The single owner of outbound delivery. Uses React Native's own Share
+ * rather than expo-sharing: on iOS, Share.share({ message, url }) hands the
+ * platform both the text (carrying the install link) and the image as
+ * activity items, which is exactly what this feature needs. expo-sharing's
+ * shareAsync has no way to attach text alongside an image on iOS — its
+ * dialogTitle option is Android/web only there.
+ *
+ * Prefers the captured image; falls back to text-only when there is no
+ * image (capture failed, or none was taken) or the image share itself
+ * fails. Never throws: every failure degrades silently rather than
+ * interrupting play.
  */
-export async function shareRun(
-  snapshot: RunSnapshot,
-  uri: string | null,
-): Promise<void> {
-  const message = shareMessage(snapshot.score, snapshot.score >= snapshot.best);
-
+async function deliver(message: string, uri: string | null): Promise<void> {
   if (uri) {
     try {
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'image/png',
-          dialogTitle: message,
-          UTI: 'public.png',
-        });
-        return;
-      }
+      await Share.share({ message, url: uri });
+      return;
     } catch {
-      // fall through to the text share
+      // fall through to the text-only share
     }
   }
 
@@ -41,4 +38,22 @@ export async function shareRun(
   } catch {
     // user dismissed the sheet, or sharing is unavailable (e.g. web)
   }
+}
+
+/** Shares a finished run: the captured card image plus text, or text alone. */
+export async function shareRun(
+  snapshot: RunSnapshot,
+  uri: string | null,
+): Promise<void> {
+  const message = shareMessage(snapshot.score, snapshot.score >= snapshot.best);
+  await deliver(message, uri);
+}
+
+/**
+ * Text-only share of the player's best score, still carrying the install
+ * link. Used from the menu, where there is no live run to render a card
+ * from.
+ */
+export async function shareBest(score: number): Promise<void> {
+  await deliver(shareMessage(score, true), null);
 }

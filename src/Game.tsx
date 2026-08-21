@@ -10,7 +10,6 @@ import {
   GestureResponderEvent,
   Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -34,7 +33,7 @@ import Ring from './Ring';
 import { recordRun } from './rating';
 import { captureCard } from './share/capture';
 import { parseChallengeUrl } from './share/challengeLink';
-import { shareMessage, shareRun } from './share/deliver';
+import { shareBest as deliverBest, shareRun } from './share/deliver';
 import ShareCard from './share/ShareCard';
 import type { RunSnapshot } from './share/types';
 import { COLORS, tensionColor } from './theme';
@@ -117,6 +116,11 @@ export default function Game() {
   const chain = useRef(0);
   const diedAt = useRef(0);
   const cardRef = useRef<View | null>(null);
+  const sharing = useRef(false);
+  // Personal-best flags for runs that finished but haven't reached a calm
+  // moment yet. recordRun must never fire on the death flash itself — see
+  // flushRatingQueue, invoked only when the player leaves to the menu.
+  const pendingRatingRuns = useRef<boolean[]>([]);
 
   const needleAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -237,12 +241,38 @@ export default function Game() {
         targetAngle: target.current,
         tension: tension(speed.current),
       });
-      recordRun(wasPersonalBest);
+      // recordRun is deferred to flushRatingQueue rather than called here:
+      // firing it now would run it synchronously alongside the death flash
+      // and inside the restart lockout window, which the rating prompt must
+      // never do.
+      pendingRatingRuns.current.push(wasPersonalBest);
       setDeathNote(note);
       setPhase('over');
     },
     [best, flashAnim],
   );
+
+  // Flushes any runs that finished since the last flush through recordRun,
+  // in order, one at a time — preserving recordRun's single-writer
+  // guarantee over its AsyncStorage keys. Called only from a calm moment
+  // (leaving to the menu), never from die() itself. Un-awaited by design:
+  // a rating prompt can never block the UI.
+  const flushRatingQueue = useCallback(() => {
+    const queued = pendingRatingRuns.current;
+    if (queued.length === 0) return;
+    pendingRatingRuns.current = [];
+    (async () => {
+      for (const wasPersonalBest of queued) {
+        await recordRun(wasPersonalBest);
+      }
+    })();
+  }, []);
+
+  const goToMenu = useCallback(() => {
+    setPhase('menu');
+    setGoal(null);
+    flushRatingQueue();
+  }, [flushRatingQueue]);
 
   // Game loop: advance the needle, detect a silent pass-by (miss).
   useEffect(() => {
@@ -285,6 +315,11 @@ export default function Game() {
     setScore(0);
     setDeathNote(null);
     setTensionT(0);
+    // Otherwise the previous run's full 1080x1920 card subtree stays
+    // mounted and reconciling for the rest of the session — die() always
+    // writes a fresh one before the share button is reachable, so this is
+    // cleanup, not a correctness fix.
+    setSnapshot(null);
     setPhase('playing');
   }, [needleAnim]);
 
@@ -355,18 +390,25 @@ export default function Game() {
   );
 
   const shareScore = useCallback(async () => {
-    if (!snapshot) return;
-    const uri = await captureCard(cardRef);
-    await shareRun(snapshot, uri);
+    if (!snapshot || sharing.current) return;
+    sharing.current = true;
+    try {
+      const uri = await captureCard(cardRef);
+      await shareRun(snapshot, uri);
+    } finally {
+      sharing.current = false;
+    }
   }, [snapshot]);
 
   // No live run exists to render a card from on the menu screen — a
   // text-only share, still carrying the install link.
   const shareBest = useCallback(async () => {
+    if (sharing.current) return;
+    sharing.current = true;
     try {
-      await Share.share({ message: shareMessage(best, true) });
-    } catch {
-      // user dismissed the sheet, or sharing is unavailable (e.g. web)
+      await deliverBest(best);
+    } finally {
+      sharing.current = false;
     }
   }, [best]);
 
@@ -564,13 +606,13 @@ export default function Game() {
         {phase === 'paused' && (
           <>
             <PillButton label="RESTART" onPress={start} />
-            <PillButton label="MENU" onPress={() => { setPhase('menu'); setGoal(null); }} />
+            <PillButton label="MENU" onPress={goToMenu} />
           </>
         )}
         {phase === 'over' && (
           <>
             <PillButton label="SHARE SCORE" accent onPress={shareScore} />
-            <PillButton label="MENU" onPress={() => { setPhase('menu'); setGoal(null); }} />
+            <PillButton label="MENU" onPress={goToMenu} />
           </>
         )}
       </View>
@@ -716,8 +758,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   challengeIntro: {
-    position: 'absolute',
+    ...FILL,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   challengeLabel: {
     color: COLORS.dim,
