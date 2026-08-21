@@ -29,6 +29,10 @@ import {
   windowAfterHit,
 } from './logic';
 import Ring from './Ring';
+import { captureCard } from './share/capture';
+import { shareMessage, shareRun } from './share/deliver';
+import ShareCard from './share/ShareCard';
+import type { RunSnapshot } from './share/types';
 import { COLORS, tensionColor } from './theme';
 
 type Phase = 'menu' | 'playing' | 'paused' | 'over';
@@ -92,6 +96,7 @@ export default function Game() {
   const [popupText, setPopupText] = useState('');
   const [tensionT, setTensionT] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
 
   const music = useAudioPlayer(THEME);
 
@@ -106,6 +111,7 @@ export default function Game() {
   const scoreRef = useRef(0);
   const chain = useRef(0);
   const diedAt = useRef(0);
+  const cardRef = useRef<View | null>(null);
 
   const needleAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -202,6 +208,14 @@ export default function Game() {
           () => {},
         );
       }
+      setSnapshot({
+        score: scoreRef.current,
+        best: Math.max(best, scoreRef.current),
+        deathNote: note,
+        needleAngle: angle.current,
+        targetAngle: target.current,
+        tension: tension(speed.current),
+      });
       setDeathNote(note);
       setPhase('over');
     },
@@ -302,17 +316,21 @@ export default function Game() {
     [pulseAnim, popupAnim, scoreScale],
   );
 
-  const shareScore = useCallback(async (value: number, isBest: boolean) => {
+  const shareScore = useCallback(async () => {
+    if (!snapshot) return;
+    const uri = await captureCard(cardRef);
+    await shareRun(snapshot, uri);
+  }, [snapshot]);
+
+  // No live run exists to render a card from on the menu screen — a
+  // text-only share, still carrying the install link.
+  const shareBest = useCallback(async () => {
     try {
-      await Share.share({
-        message: isBest
-          ? `My best streak in Pulse is ${value}. One tap, perfect timing — can you beat it?`
-          : `I just scored ${value} in Pulse. One tap, perfect timing — can you beat it?`,
-      });
+      await Share.share({ message: shareMessage(best, true) });
     } catch {
       // user dismissed the sheet, or sharing is unavailable (e.g. web)
     }
-  }, []);
+  }, [best]);
 
   const pause = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
@@ -493,10 +511,7 @@ export default function Game() {
       {/* Phase actions under the ring */}
       <View style={styles.actions}>
         {phase === 'menu' && best > 0 && (
-          <PillButton
-            label="SHARE BEST"
-            onPress={() => shareScore(best, true)}
-          />
+          <PillButton label="SHARE BEST" onPress={shareBest} />
         )}
         {phase === 'paused' && (
           <>
@@ -506,11 +521,7 @@ export default function Game() {
         )}
         {phase === 'over' && (
           <>
-            <PillButton
-              label="SHARE SCORE"
-              accent
-              onPress={() => shareScore(score, score > 0 && score >= best)}
-            />
+            <PillButton label="SHARE SCORE" accent onPress={shareScore} />
             <PillButton label="MENU" onPress={() => setPhase('menu')} />
           </>
         )}
@@ -528,6 +539,15 @@ export default function Game() {
           { backgroundColor: COLORS.danger, opacity: flashAnim },
         ]}
       />
+
+      {/* Off-screen share card, captured by shareScore on tap */}
+      {snapshot && (
+        <View style={styles.cardHost} pointerEvents="none" collapsable={false}>
+          <View ref={cardRef} collapsable={false}>
+            <ShareCard snapshot={snapshot} />
+          </View>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -683,5 +703,11 @@ const styles = StyleSheet.create({
     color: COLORS.dim,
     fontSize: 13,
     letterSpacing: 1,
+  },
+  cardHost: {
+    position: 'absolute',
+    left: -10000,
+    top: 0,
+    opacity: 0,
   },
 });

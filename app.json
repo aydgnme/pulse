@@ -56,7 +56,8 @@
       ],
       "expo-asset",
       "@bacons/apple-targets",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {
