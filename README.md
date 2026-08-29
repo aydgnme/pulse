@@ -28,6 +28,7 @@ iPhone. (`npx expo start --web` also works for a quick look in the browser.)
 - [`store/RELEASE.md`](store/RELEASE.md) — step-by-step submission checklist (EAS build & submit)
 - [`store/app-store-listing.md`](store/app-store-listing.md) — name, subtitle, description (EN/TR), keywords
 - [`store/screenshots/`](store/screenshots) — 6.5-inch App Store screenshots (1284×2778)
+- [`store/screenshots-watch/`](store/screenshots-watch) — Apple Watch App Store screenshots (416×496)
 - [`store/privacy-policy.md`](store/privacy-policy.md) — privacy policy to host and link
 - [`store/branding/`](store/branding) — logo mark, lockup, wordmarks, social banner
 - [`scripts/`](scripts) — Python scripts that regenerate icons, screenshots, branding, and the soundtrack

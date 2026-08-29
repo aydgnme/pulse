@@ -42,3 +42,6 @@ yarn-error.*
 
 # subagent-driven-development scratch
 .superpowers/
+
+# Python
+__pycache__/

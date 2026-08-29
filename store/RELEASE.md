@@ -67,7 +67,7 @@ app, so the ＋ New App step is done. Build 3 was rejected under guideline 2.5.4
 2. Paste "What's New in This Version" from the 1.1.0 entry in
    [`../CHANGELOG.md`](../CHANGELOG.md) (EN + TR locales).
 3. **Apple Watch screenshots** are required now that the build embeds a watchOS
-   app — App Store Connect will not let you submit without them. Three are ready
+   app — App Store Connect will not let you submit without them. Four are ready
    in [`screenshots-watch/`](screenshots-watch/) at 416×496, the size App Store
    Connect lists for Apple Watch Series 10 and 11. Upload them in filename
    order. The iPhone screenshots in [`screenshots/`](screenshots/) do not cover
