@@ -138,4 +138,9 @@ same way the iPhone set is. Upload in this order:
 3. `3-one-miss.png` — One miss ends it.
 4. `4-best.png` — Chase your best.
 
+`store/preview/pulse-app-preview-6.5.mp4` — a 25-second App Preview at
+886×1920, the size App Store Connect accepts for every current iPhone class
+from 6.1" to 6.9". One real run: menu, the climb, the colour drift, and the
+miss that ends it. Recipe in [`RELEASE.md`](RELEASE.md).
+
 iPad screenshots are not needed: `supportsTablet` is `false`.
